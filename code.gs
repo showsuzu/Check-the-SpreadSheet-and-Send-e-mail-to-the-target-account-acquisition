@@ -1,0 +1,305 @@
+/*
+Copyright 2022 Shosaku Suzuki
+*/
+/** 
+ * このスプレッドシートは、特定のフォルダにあるスプレッドシートをチェックし
+ * 特定の条件を検索、
+ * 検索条件に一致した行のメールアドレスにメールを配信するスクリプト
+ * アプリなどの利用同意を管理しているスプレッドシート（SHEET_REPORT_NAME）に対して
+ * 新規に同意した人に対して、IDの入力を促すメールを送信する
+ * IDを管理しているスプレッドシート（SHEET_IDINFO_NAME）にID記載があるかを確認し
+ * なかったらID記載の催促を行う
+ * 利用同意およびIDは、Google Formで取得することとして、共通キーとしてメールアドレス（連絡先）を両スプレッドシートにもつ
+ */
+
+// Application constants
+const APP_FOLDER = '対象となるスプレッドシートを含むGoogleドライブのフォルダ名'; // Application primary folder
+const APP_TITLE = 'このスクリプトの名前'; // Application name
+const SHEET_REPORT_NAME = '編集するスプレッドシートの名前を記載';         // Name of destination spreadsheet.
+const SHEET_IDINFO_NAME = '編集するスプレッドシートの編集条件となるスプレッドシートの名前を記載';         // Name of destination spreadsheet.
+
+// spreadsheetの列タイトル定義
+const AGREE_COLUMN = "同意確認";
+const NAME_COLUMN = "お名前";
+const ADRR_COLUMN = "連絡先";
+const DONE_COLUMN = "メール案内処理";
+const RES_COLUMN = "利用者調査票返信";
+const REMN_COLUMN = "催促回数";
+const ID_COLUMN = "CASIO ID登録情報取得";
+const RPRQ_COLUMN = "個人レポートの要否";
+const DONE_RES = "";
+const AGREE_RES = "同意する";
+const TS_COLUMN = "タイムスタンプ";
+const MA_COLUMN = "メールアドレス";
+const MAX_REMIND_NUM = 5;   // ID入力の催促回数（1週間おきに催促する）
+
+const ANC_URL = "ここにGoogleFormのURLを記載する";
+const ANC_NAME = "ここにGoogleFormの名称を記載する";
+const INITIALGUIDE_URL = "説明書があれば、説明書のURLをここに記載する";
+const INITIALGUIDE_NAME = "説明書のフィある名をここに記載する";
+const EMAIL_TITLE = "Emailタイトルをここに記載する";
+const FROM_NAME = "Email差出人の名前をここに記載する";
+
+function sendEmailProcess_(name, addr) {
+  const emailBcc = Session.getEffectiveUser().getEmail();
+  // Assembles email body as html.
+  var eMailBody1 = `${name} 様<br><br>`;
+  eMailBody1 += `（本メールは自動配信メールです）<br><br>`;
+  eMailBody1 += `情報共有にご同意いただきまして、大変ありがとうございます。<br>`;
+  var eMailBody2 = `アクティビティ実施状況を特定保健指導支援者と共有するため、Walkmetrixで使用するCASIO IDの登録情報が必要となります。<br>`;
+  var eMailBody3 = `つきましてはCASIO IDアカウント取得後に、以下の調査票へのご回答をお願いします。<br>`;
+  var eMailBody4 = `<b><a href= "${ANC_URL}" target=\"_blank\">${ANC_NAME}</a></b><br><br>`;
+  var eMailBody5 = `（CASIO IDアカウント取得方法が不明な方は、「`;
+  var eMailBody6 = `<a href= "${INITIALGUIDE_URL}" target=\"_blank\">${INITIALGUIDE_NAME}</a>`;
+  var eMailBody7 = `」を参照の上、ご対応をお願いします）<br><br>`;
+  var eMailBody8 = `大変お手数をおかけしますが、なるべく早めのご回答をお願いいたします。<br>`;
+  var eMailBody9 = `なお、共有していただいた情報は、2022年度特定保健指導でのみ使用します。<br><br>`;
+  eMailBody9 += `以上、よろしくお願いいたします<br>`;
+
+  MailApp.sendEmail({
+    to: addr,
+    subject: `${EMAIL_TITLE}`,
+    htmlBody: eMailBody1 + eMailBody2 + eMailBody3 + eMailBody4 + eMailBody5 + eMailBody6 + eMailBody7 + eMailBody8 + eMailBody9,
+    bcc: `${emailBcc}`,
+    name: `${FROM_NAME}`,
+  });
+  console.log(`Email sent to ${name} <${addr}>`);
+}
+
+function sendRemindProcess_(name, addr) {
+  const emailBcc = Session.getEffectiveUser().getEmail();
+  // Assembles email body as html.
+  var eMailBody1 = `${name} 様<br><br>`;
+  eMailBody1 += `（本メールは自動配信メールです）<br><br>`;
+  eMailBody1 += `先日メールで案内した、調査票へのご回答をまだいただいていないようです。<br>`;
+  var eMailBody2 = `お忙しいところ大変お手数ですが、CASIO IDアカウント取得後に、以下の調査票へのご回答をお願いします。<br>`;
+  var eMailBody3 = `<b><a href= "${ANC_URL}" target=\"_blank\">${ANC_NAME}</a></b><br><br>`;
+  var eMailBody4 = `（CASIO IDアカウント取得方法が不明な方は、「`;
+  var eMailBody5 = `<a href= "${INITIALGUIDE_URL}" target=\"_blank\">${INITIALGUIDE_NAME}</a>`;
+  var eMailBody6 = `」を参照の上、ご対応をお願いします）<br><br>`;
+  var eMailBody7 = `アクティビティ実施状況を、特定保健指導の支援者と共有するために必要となる情報ですので、<br>`;
+  var eMailBody8 = `なるべく早めのご回答をお願いいたします。<br>`;
+  var eMailBody9 = `なお、共有していただいた情報は、2022年度特定保健指導でのみ使用します。<br><br>`;
+  var eMailBody10 = `以上、お手数をおかけしますが、ご対応よろしくお願いいたします<br>`;
+
+  MailApp.sendEmail({
+    to: addr,
+    subject: `${EMAIL_TITLE}`,
+    htmlBody: eMailBody1 + eMailBody2 + eMailBody3 + eMailBody4 + eMailBody5 + eMailBody6 + eMailBody7 + eMailBody8 + eMailBody9 + eMailBody10,
+    bcc: `${emailBcc}`,
+    name: `${FROM_NAME}`,
+  });
+  console.log(`Remind sent to ${name} <${addr}>`);
+}
+
+function processedSend_(processed_array, objSpreadSheet) {
+  // Prepares summary email.
+  // Gets variables to link to this Apps Script project.
+  const scriptId = ScriptApp.getScriptId();
+  const scriptUrl = DriveApp.getFileById(scriptId).getUrl();
+  const scriptName = DriveApp.getFileById(scriptId).getName();
+
+  // Gets user email and timestamp.
+  const emailTo = Session.getEffectiveUser().getEmail();
+  const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss zzzz");
+
+  // Prepares lists and counts of anser.
+  const processedCount = processed_array.length
+
+  const sheetUrl = objSpreadSheet.getUrl()
+  const sheetName = objSpreadSheet.getName()
+
+  // Assembles email body as html.
+  const eMailBody = `${APP_TITLE} ran an automated process at ${timestamp}.<br><br>` +
+    `<b>Num of emails sent to Google Forms for obtaining CASIO ID info:</b> ${processedCount}<br>` +
+    `<br>View all updates in the Google spreadsheet ` +
+    `<b><a href= "${sheetUrl}" target=\"_blank\">${sheetName}</a></b>.<br>` +
+    `<br>*************<br>` +
+    `<br>This email was generated by Google Apps Script. ` +
+    `To learn more about this application or make changes, open the script project below: <br>` +
+    `<a href= "${scriptUrl}" target=\"_blank\">${scriptName}</a>`
+
+  MailApp.sendEmail({
+    to: emailTo,
+    subject: `実行結果自動配信：${APP_TITLE}`,
+    htmlBody: eMailBody
+  });
+  console.log(`Script report email sent to ${emailTo}`);
+}
+
+
+// 以下、メイン処理
+
+function checkAndSendEmail() {
+  // --------------------
+  // 新規同意者に対して回答案内メール送信処理
+  // --------------------
+  // Gets application & supporting folders.
+  const folderAppPrimary = getApplicationFolder_(APP_FOLDER);
+  const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
+
+  // Gets the application's destination spreadsheet {Spreadsheet object}
+  let objSpreadSheet = getSpreadSheet_(SHEET_REPORT_NAME, folderAppPrimary);
+  let sheet = objSpreadSheet.getSheets()[0];
+  let lastRow = sheet.getLastRow();     // シートの最終行を取得
+  let lastCol = sheet.getLastColumn();  // シートの最終列を取得
+  let col_agree, col_name, col_addr, col_done, col_res, col_remind, col_id_agreest, col_rpt_agreest = 0;
+
+  let header_array = sheet.getRange(1, 1, 1, lastCol).getValues();  // ヘッダー（列タイトル）を全て取得する
+  let processed_array = [];
+
+  if (lastRow < 2) {
+    processedSend_(processed_array, objSpreadSheet);
+    console.log("利用情報返信チェック＆催促処理終了");
+    return;
+  }
+
+  // 列番号の確認（1行目の列タイトルのカラム数を求める）
+  for (let col = 0; col <= lastCol - 1; col++) {  // 配列の添字はゼロ始まりだが、スプレッドシートは１始まり（ややこしい）
+    val = header_array[0][col];
+    switch (val) {
+      case AGREE_COLUMN:
+        col_agree = col + 1;
+        break;
+      case NAME_COLUMN:
+        col_name = col + 1;
+        break;
+      case ADRR_COLUMN:
+        col_addr = col + 1;
+        break;
+      case DONE_COLUMN:
+        col_done = col + 1;
+        break;
+      case RES_COLUMN:
+        col_res = col + 1;
+        break;
+      case REMN_COLUMN:
+        col_remind = col + 1;
+        break;
+      case ID_COLUMN:
+        col_id_agreest = col + 1;
+        break;
+      case RPRQ_COLUMN:
+        col_rpt_agreest = col + 1;
+        break;
+    }
+  }
+
+  let done_array = sheet.getRange(2, col_done, lastRow - 1, 1).getValues();  // 完了列を全て取得する
+  let name_array = sheet.getRange(2, col_name, lastRow - 1, 1).getValues();  // 新しい名前列を全て取得する
+  let addr_array = sheet.getRange(2, col_addr, lastRow - 1, 1).getValues();  // emailアドレス列を全て取得する
+  let agree_array = sheet.getRange(2, col_agree, lastRow - 1, 1).getValues(); // 同意列を全て取得する
+  let res_array = sheet.getRange(2, col_res, lastRow - 1, 1).getValues(); // 調査票返信列を全て取得する
+  let remind_array = sheet.getRange(2, col_remind, lastRow - 1, 1).getValues(); // 催促回数列を全て取得する
+  let id_agrst_array = sheet.getRange(2, col_id_agreest, lastRow - 1, 1).getValues(); // ID情報列を全て取得する
+  let rp_agrst_array = sheet.getRange(2, col_rpt_agreest, lastRow - 1, 1).getValues(); // 個人レポート要否列を全て取得する
+
+  // 処理を行う最初の行を検出する
+  for (let row = 0; row <= lastRow - 2; row++) {
+    if (done_array[row][0] == DONE_RES) {
+      // 同意確認
+      if (agree_array[row][0] == AGREE_RES) {
+        // メールを送信する
+        sendEmailProcess_(name_array[row][0], addr_array[row][0]);
+      } else {
+        console.log(`Email NOT sent to List row no.${row + 2}`);
+      }
+      // 処理完了の入力を行う
+      done_array[row][0] = timestamp;
+      processed_array.push(row);
+    }
+  }
+  console.log("新規同意アンケート回答者の処理完了。利用情報返信チェック＆催促処理開始");
+
+  // --------------------
+  // ID入力への返信がないユーザーに対しての催促メール送信処理
+  // --------------------
+  // ID情報Spreadsheetを読み込む
+  let objInfoSpreadSheet = getSpreadSheet_(SHEET_IDINFO_NAME, folderAppPrimary);
+  let infoSheet = objInfoSpreadSheet.getSheets()[0];
+  let infoLastRow = infoSheet.getLastRow();     // シートの最終行を取得
+  let infoLastCol = infoSheet.getLastColumn();  // シートの最終列を取得
+  let col_timestamp, col_mailadr, col_id_infost, col_rpt_infost = 0;
+
+  let infoheader_array = infoSheet.getRange(1, 1, 1, infoLastCol).getValues();  // ヘッダー（列タイトル）を全て取得する
+  // 列番号の確認（1行目の列タイトルのカラム数を求める）
+  for (let col = 0; col <= infoLastCol - 1; col++) {  // 配列の添字はゼロ始まりだが、スプレッドシートは１始まり（ややこしい）
+    val = infoheader_array[0][col];
+    switch (val) {
+      case TS_COLUMN:
+        col_timestamp = col + 1;
+        break;
+      case MA_COLUMN:
+        col_mailadr = col + 1;
+        break;
+      case ID_COLUMN:
+        col_id_infost = col + 1;
+        break;
+      case RPRQ_COLUMN:
+        col_rpt_infost = col + 1;
+        break;
+    }
+  }
+  // 利用情報の回答から必要事項を入手
+  let timestamp_array = infoSheet.getRange(2, col_timestamp, infoLastRow - 1, 1).getValues();
+  let mailadr_array = infoSheet.getRange(2, col_mailadr, infoLastRow - 1, 1).getValues();
+  let id_infost_array = infoSheet.getRange(2, col_id_infost, infoLastRow - 1, 1).getValues(); // ID情報列を全て取得する
+  let rp_infost_array = infoSheet.getRange(2, col_rpt_infost, infoLastRow - 1, 1).getValues(); // 個人レポート要否列を全て取得する
+
+  // 利用同意Spreadsheetの利用者調査票返信列の空欄を探す
+  for (let row = 0; row <= lastRow - 2; row++) {
+    if (res_array[row][0] == "") {
+      if (agree_array[row][0] != AGREE_RES) {
+        // 非同意の場合は利用情報レスポンス不要
+        res_array[row][0] = "ー";
+      } else {
+        // 同意で利用情報レスポンスなし
+        // 空欄でかつ、同意すると回答のあるメアドが、ID情報Spreadsheetのメールアドレス列に存在するかを確認する
+        // （同意したメアドと、ID入力したメアドの突合）
+        var i = mailadr_array.flat().indexOf(addr_array[row][0]);
+        if (i >= 0) {
+          // レスポンスにメールアドレスが存在（ID入力あり）
+          res_array[row][0] = timestamp_array[i][0];
+          id_agrst_array[row][0] = id_infost_array[i][0]; // ID情報を同意スプレッドシートにコピー
+          rp_agrst_array[row][0] = rp_infost_array[i][0]; // 
+        } else {
+          // 存在していない場合、まだ利用者調査票の入力がない
+          // 現在の日付がメール案内処理から7日刻みで経過したか（14日、21日も）を確認し、条件が合えば催促メールを出す
+          var sentDate = new Date(done_array[row][0]).getTime();
+          var now = new Date(timestamp).getTime();
+          var daysDiff = Math.abs(now - sentDate);
+          daysDiff = Math.trunc(daysDiff / 1000 / 60 / 60 / 24);  // 時間差をもとに日数を算出（小数点以下を切り捨て）
+          if ((daysDiff / 7) >= 1 && (daysDiff % 7) == 0) {
+            if (remind_array[row][0] < MAX_REMIND_NUM) {
+              // 7日経過していたら、同意Spreadsheetの連絡先に催促メールを送る
+              console.log(`${name_array[row][0]} さん ${daysDiff} 日経過のため催促メールを送信`);
+              sendRemindProcess_(name_array[row][0], addr_array[row][0]);
+              // 処理完了の入力を行う
+              done_array[row][0] = timestamp;
+              if (remind_array[row][0] == "") {
+                remind_array[row][0] = 1;
+              } else {
+                remind_array[row][0] += 1;
+              }
+            } else {
+              res_array[row][0] = "応答なし";
+              console.log(`${name_array[row][0]} さんへは${MAX_REMIND_NUM} 回催促したので、諦める`);
+            }
+          } else {
+            console.log(`${name_array[row][0]} さん ${daysDiff} 日経過。催促メールは送信しない`);
+          }
+        }
+      }
+    }
+  }
+  // spreadsheetに送信完了結果の書き込みを行う
+  sheet.getRange(2, col_done, lastRow - 1, 1).setValues(done_array);
+  sheet.getRange(2, col_res, lastRow - 1, 1).setValues(res_array);
+  sheet.getRange(2, col_remind, lastRow - 1, 1).setValues(remind_array);
+  sheet.getRange(2, col_id_agreest, lastRow - 1, 1).setValues(id_agrst_array);
+  sheet.getRange(2, col_rpt_agreest, lastRow - 1, 1).setValues(rp_agrst_array);
+
+  processedSend_(processed_array, objSpreadSheet);
+
+  console.log("利用情報返信チェック＆催促処理終了");
+}
