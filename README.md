@@ -1,1 +1,5 @@
-# Check-the-SpreadSheet-and-Send-e-mail-to-the-target-account-acquisition
+## Googleスプレッドシートをチェックし、条件に一致した人にメールを送信するGoogle App Script
+
+特定のフォルダにあるスプレッドシートの中で特定の条件を検索、
+検索条件に一致した行のメールアドレスにメールを配信するスクリプト
+詳細はcode.gsの行頭コメントを参照
